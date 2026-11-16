@@ -3,6 +3,7 @@
 'use strict';
 
 const KEY = 'minshuku-uketsuke-v1';
+const VERSION = '3'; // 直すたびに数字を上げる。はじめの画面の右下に出るので、反映されたか見分けられる
 const IDLE_MS = 3 * 60 * 1000; // お客さま画面は3分さわらないと最初の画面に戻る
 
 /* ---------- 小さな道具 ---------- */
@@ -136,7 +137,7 @@ function vHome() {
       <button class="btn big" data-act="go" data-to="faq">館内・周辺のご案内<small>よくあるご質問</small></button>
       <button class="btn big" data-act="go" data-to="help">お困りのとき<small>宿の者に連絡する</small></button>
     </div>
-    <button class="gear" data-act="go" data-to="pin" aria-label="管理画面">管理</button>
+    <button class="gear" data-act="go" data-to="pin" aria-label="管理画面">管理（版 ${VERSION}）</button>
   </main>`;
 }
 

@@ -1,0 +1,12 @@
+{
+  "name": "民宿 受付ご案内",
+  "short_name": "受付ご案内",
+  "start_url": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#f6f1e7",
+  "theme_color": "#2f5d50",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

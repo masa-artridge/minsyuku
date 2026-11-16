@@ -111,6 +111,15 @@ main.center { text-align: center; align-items: stretch; }
 .facts span { color: var(--sub); }
 .facts b { font-size: 1.2rem; text-align: right; }
 
+/* お部屋・お支払い */
+.tag { color: var(--accent); font-weight: 600; font-size: 0.85rem; }
+.roomcard { text-align: center; border: 3px solid var(--main); }
+.roombig { font-size: 3rem; font-weight: 700; line-height: 1.4; color: var(--main); }
+.roomnote { margin-top: 0.6rem; padding-top: 0.6rem; border-top: 1px dashed var(--line); font-size: 1.15rem; text-align: left; }
+.pay { text-align: left; }
+.pay .body { font-size: 1.15rem; margin-top: 0.3rem; }
+.btn.tall { min-height: 5.5em; font-size: 1.3rem; }
+
 /* 質問 */
 .search { width: 100%; padding: 0.8em 1em; border-radius: 12px; border: 2px solid var(--line); background: #fff; }
 #faqlist { display: flex; flex-direction: column; gap: 0.6rem; }

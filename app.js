@@ -30,6 +30,7 @@ function sample() {
       phone: '090-0000-0000',
       checkout: '10:00',
       pin: '0000',
+      payment: PAYMENT_SAMPLE,
       help: 'お困りのときは、下の番号にお電話ください。\n営業中ですぐに出られないことがあります。そのときは折り返しお電話します。\n\n急病や火事のときは、まず 119 番へ。'
     },
     common: [
@@ -67,6 +68,7 @@ let db;
 function load() {
   try { db = JSON.parse(localStorage.getItem(KEY)); } catch (e) { db = null; }
   if (!db || !db.inn) { db = sample(); save(); }
+  if (db.inn.payment === undefined) { db.inn.payment = PAYMENT_SAMPLE; save(); } // 前の版から使っている場合の追加
 }
 function save() {
   try { localStorage.setItem(KEY, JSON.stringify(db)); }
@@ -90,19 +92,27 @@ function speak(text) {
 }
 function stopSpeak() { if (canSpeak) speechSynthesis.cancel(); }
 
-/* ---------- 説明の組み立て（共通 → プラン別 → そのお客さま向け） ---------- */
-function stepsFor(planId, r) {
+/* ---------- 説明の組み立て（共通 → プラン別） ----------
+   お部屋とそのお客さまへの伝言は、最初の「お部屋」画面と最後の画面に出す */
+function stepsFor(planId) {
   const plan = db.plans.find(p => p.id === planId);
   const s = db.common.map(x => ({ ...x, tag: 'みなさまへのご案内' }));
   if (plan) plan.items.forEach(x => s.push({ ...x, tag: `「${plan.name}」のご案内` }));
-  if (r && (r.room || r.note)) {
-    s.push({
-      title: `${r.name} 様へ`,
-      body: [r.room && `お部屋は ${r.room} です。`, r.note].filter(Boolean).join('\n'),
-      tag: 'お客さまへのご案内'
-    });
-  }
   return s.filter(x => (x.title || x.body));
+}
+
+const PAYMENT_SAMPLE = 'お支払いは現地でお願いします。現金または PayPay（ペイペイ）がご利用いただけます。\n\n■ 現金の方\n・お急ぎの方は、お部屋のテーブルの上に置いておいてください。\n・または、チェックアウトのときにフロントでお支払いください。\n\n■ PayPay の方\n・フロントまでお越しください。';
+
+const roomBlock = r => `
+    <section class="card roomcard">
+      <p class="tag">お部屋</p>
+      ${r.room ? `<p class="roombig">${esc(r.room)}</p>` : '<p class="body">お部屋は、宿の者からご案内します。</p>'}
+      ${r.note ? `<p class="roomnote">${nl(r.note)}</p>` : ''}
+    </section>`;
+
+function markCheckedIn(id) {
+  const r = db.reservations.find(x => x.id === id);
+  if (r && !r.checkedInAt) { r.checkedInAt = new Date().toISOString(); save(); }
 }
 
 /* ====================================================================
@@ -157,9 +167,24 @@ function vNoName() {
   </main>`;
 }
 
+/* 名前を選んだ直後：まずお部屋を出し、常連の方はここで終われるようにする */
+function vRoom() {
+  const r = db.reservations.find(x => x.id === view.resId);
+  if (!r) return vPick();
+  return header(`${r.name} 様`, 'pick') + `
+  <main class="narrow center">
+    <h2 class="thanks">ようこそ、${esc(r.name)} 様</h2>
+    ${roomBlock(r)}
+    <div class="row2">
+      <button class="btn primary big tall" data-act="skip">いつもご利用の方<small>このままお部屋へどうぞ</small></button>
+      <button class="btn primary big tall" data-act="first">初めての方<small>お泊まりのご案内を見る</small></button>
+    </div>
+  </main>`;
+}
+
 function vGuide() {
   const r = db.reservations.find(x => x.id === view.resId);
-  const steps = stepsFor(view.planId, r);
+  const steps = stepsFor(view.planId);
   const n = steps.length;
   const i = Math.min(view.i, n);
   const dots = `<div class="progress"><div style="width:${Math.round((i) / n * 100)}%"></div></div>`;
@@ -199,8 +224,9 @@ function vDone() {
   <main class="narrow center">
     <div class="check">✓</div>
     <h2 class="thanks">${r ? esc(r.name) + ' 様、' : ''}ごゆっくりお過ごしください</h2>
+    ${r ? roomBlock(r) : ''}
+    ${db.inn.payment ? `<section class="card pay"><p class="tag">お支払いについて</p><p class="body">${nl(db.inn.payment)}</p></section>` : ''}
     <section class="card facts">
-      ${r && r.room ? `<div><span>お部屋</span><b>${esc(r.room)}</b></div>` : ''}
       ${r ? `<div><span>チェックアウト</span><b>${jdate(lastDay(r))} ${esc(db.inn.checkout)} まで</b></div>` : `<div><span>チェックアウト</span><b>${esc(db.inn.checkout)} まで</b></div>`}
       <div><span>宿の連絡先</span><b>${esc(db.inn.phone)}</b></div>
     </section>
@@ -215,7 +241,7 @@ function vDone() {
 function vFaq() {
   const q = (view.q || '').trim();
   const hit = x => !q || (x.q + x.a).includes(q);
-  const guides = [...db.common.map(x => ({ q: x.title, a: x.body }))].filter(hit);
+  const guides = [...(db.inn.payment ? [{ q: 'お支払いについて', a: db.inn.payment }] : []), ...db.common.map(x => ({ q: x.title, a: x.body }))].filter(hit);
   const faqs = db.faqs.filter(hit);
   const block = (title, arr) => arr.length ? `<h2 class="sec">${title}</h2>` + arr.map(x => `
       <details class="card qa"><summary>${esc(x.q)}</summary><p class="body">${nl(x.a)}</p></details>`).join('') : '';
@@ -285,7 +311,7 @@ function resForm(r) {
       <label>プラン<select name="planId">${db.plans.map(p => `<option value="${p.id}" ${p.id === v.planId ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></label>
       <label>お部屋<input name="room" value="${esc(v.room)}" placeholder="例：2階「松」"></label>
     </div>
-    <label>このお客さまだけに伝えること（なければ空のまま）<textarea name="note" rows="3">${esc(v.note)}</textarea></label>
+    <label>このお客さまだけに伝えること（お部屋と一緒に出ます。なければ空のまま）<textarea name="note" rows="3">${esc(v.note)}</textarea></label>
     <div class="actions">
       <button class="btn primary">保存する</button>
       <button type="button" class="btn" data-act="res-cancel">やめる</button>
@@ -373,6 +399,7 @@ function aInn() {
       <label>チェックアウトの時刻<input data-bind="inn.checkout" value="${esc(db.inn.checkout)}" placeholder="例：10:00"></label>
       <label>管理画面の暗証番号<input data-bind="inn.pin" value="${esc(db.inn.pin)}" inputmode="numeric"></label>
     </div>
+    <label>お支払いの案内（受付が終わった画面に出ます。空にすると出ません）<textarea data-bind="inn.payment" rows="9">${esc(db.inn.payment)}</textarea></label>
     <label>「お困りのとき」に出す文章<textarea data-bind="inn.help" rows="5">${esc(db.inn.help)}</textarea></label>
   </section>
   <section class="card form">
@@ -390,7 +417,7 @@ function aInn() {
    描画と操作
    ==================================================================== */
 function render() {
-  const v = { home: vHome, pick: vPick, noname: vNoName, guide: vGuide, done: vDone, faq: vFaq, help: vHelp, pin: vPin, admin: vAdmin }[view.name] || vHome;
+  const v = { home: vHome, pick: vPick, room: vRoom, noname: vNoName, guide: vGuide, done: vDone, faq: vFaq, help: vHelp, pin: vPin, admin: vAdmin }[view.name] || vHome;
   app.innerHTML = v();
   document.body.className = view.name === 'admin' ? 'is-admin' : 'is-guest';
 }
@@ -403,17 +430,18 @@ const acts = {
   },
   start(el) {
     const r = db.reservations.find(x => x.id === el.dataset.id);
-    if (r) go({ name: 'guide', resId: r.id, planId: r.planId, i: 0 });
+    if (r) go({ name: 'room', resId: r.id, planId: r.planId });
   },
+  skip() { markCheckedIn(view.resId); go({ name: 'done', resId: view.resId, planId: view.planId }); },
+  first() { go({ name: 'guide', resId: view.resId, planId: view.planId, i: 0 }); },
   'start-plan'(el) { go({ name: 'guide', resId: null, planId: el.dataset.id, i: 0 }); },
   step(el) { go({ ...view, i: Math.max(0, view.i + Number(el.dataset.d)) }); },
   speak() {
-    const s = stepsFor(view.planId, db.reservations.find(x => x.id === view.resId))[view.i];
+    const s = stepsFor(view.planId)[view.i];
     if (s) speak(`${s.title}。${s.body}`);
   },
   finish() {
-    const r = db.reservations.find(x => x.id === view.resId);
-    if (r && !r.checkedInAt) { r.checkedInAt = new Date().toISOString(); save(); }
+    markCheckedIn(view.resId);
     go({ name: 'done', resId: view.resId, planId: view.planId });
   },
   review() { go({ name: 'guide', resId: view.resId, planId: view.planId, i: 0 }); },
